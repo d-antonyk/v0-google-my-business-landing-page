@@ -15,6 +15,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Send, Phone, Mail } from "lucide-react"
 import { useState } from "react"
 
+// cookie helper
+const getCookie = (name: string) =>
+  typeof document === "undefined"
+    ? ""
+    : (`; ${document.cookie}`.split(`; ${name}=`).pop() || "").split(";").shift() || ""
+
 export function Hero() {
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
@@ -28,15 +34,51 @@ export function Hero() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    try {
+      const digits = (formData.phone || "").replace(/\D+/g, "")
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+      const payload = {
+        caller_name: formData.name,
+        phone_number: digits,
+        email: formData.email,
 
-    console.log("[v0] Form submitted:", formData)
-    alert("Thank you! We'll contact you soon.")
+        // кастом/атрибуция — как в CTA
+        // message кладём в кастомные поля на сервере, здесь просто пробрасываем:
+        // можно и сразу custom_message отправлять, но мы шлём общий message
+        message: formData.message,
 
-    setFormData({ name: "", email: "", phone: "", message: "" })
-    setIsSubmitting(false)
-    setOpen(false)
+        gclid: getCookie("gclid"),
+        gbraid: getCookie("gbraid"),
+        utm_source: getCookie("utm_source"),
+        utm_medium: getCookie("utm_medium"),
+        utm_campaign: getCookie("utm_campaign"),
+        ctm_session_id: getCookie("ctm_session_id") || getCookie("ctm_session"),
+        embed_url: typeof window !== "undefined" ? window.location.href : "",
+      }
+
+      const rsp = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const text = await rsp.text()
+      let data: any = null
+      try { data = JSON.parse(text) } catch {}
+
+      if (!rsp.ok || data?.status !== "success") {
+        throw new Error(data?.text || text || "CTM error")
+      }
+
+      alert("Thank you! We'll contact you soon.")
+      setFormData({ name: "", email: "", phone: "", message: "" })
+      setOpen(false)
+    } catch (err) {
+      console.error(err)
+      alert("Submission error. Please try again or call us.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -51,9 +93,7 @@ export function Hero() {
       {/* Desktop blue diagonal background with phone image */}
       <div
         className="hidden lg:block absolute top-0 right-0 w-[58%] h-full bg-gradient-to-br from-[#4169E1] to-[#3B5FD9] overflow-hidden"
-        style={{
-          clipPath: "polygon(15% 0, 100% 0, 100% 100%, 0 100%)",
-        }}
+        style={{ clipPath: "polygon(15% 0, 100% 0, 100% 100%, 0 100%)" }}
       >
         <img
           src="https://topposition.com/wp-content/uploads/2025/01/gmb-hero-img-1.webp"

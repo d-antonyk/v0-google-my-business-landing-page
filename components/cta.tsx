@@ -9,6 +9,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Phone, Mail, Send } from "lucide-react"
 import { useState } from "react"
 
+const getCookie = (name: string) =>
+  typeof document === "undefined"
+    ? ""
+    : (`; ${document.cookie}`.split(`; ${name}=`).pop() || "").split(";").shift() || "";
+
 export function CTA() {
   const [formData, setFormData] = useState({
     name: "",
@@ -21,15 +26,37 @@ export function CTA() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    try {
+      const digits = (formData.phone || "").replace(/\D+/g, "")
 
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+      const payload = {
+        caller_name: formData.name,
+        phone_number: digits,
+        email: formData.email,
+        gclid: getCookie("gclid"),
+        gbraid: getCookie("gbraid"),
+        utm_source: getCookie("utm_source"),
+        utm_medium: getCookie("utm_medium"),
+        utm_campaign: getCookie("utm_campaign"),
+        ctm_session_id: getCookie("ctm_session_id") || getCookie("ctm_session"),
+        embed_url: typeof window !== "undefined" ? window.location.href : "",
+      }
 
-    console.log("[v0] Form submitted:", formData)
-    alert("Thank you! We'll contact you soon.")
+      const rsp = await fetch("/api", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
 
-    setFormData({ name: "", email: "", phone: "", message: "" })
-    setIsSubmitting(false)
+      const data = await rsp.json()
+      if (!rsp.ok || data?.status !== "success") {
+        throw new Error(data?.text || "CTM error")
+      }
+
+      alert("Thank you! We'll contact you soon.")
+      setFormData({ name: "", email: "", phone: "", message: "" })
+    } catch (err) {
+      console.error(err)
+      alert("Submission error. Please try again or call us.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
